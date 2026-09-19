@@ -19,7 +19,7 @@ prefix = "\n\nerror_catalog := map[Error_Id]Error_Meta{\n"
 suffix = "\n}\n"
 error = [
   { text = """
-    {{name}} = {
+    Err_{{name}} = {
         message  = "{{message}}",
         hint     = "{{hint}}",
         severity = "{{severity}}",
