@@ -10,7 +10,8 @@
 #   1. Se actualiza `version` en Cargo.toml (+ Cargo.lock vía cargo build)
 #   2. Se hace commit del bump con "[skip ci]" (para no re-disparar este workflow)
 #   3. Se crea y pushea la tag v1.2.3
-#   4. Se crea un GitHub Release con el binario compilado (linux x86_64)
+#   4. Se crea un GitHub Release con el binario compilado
+#      (asset: newerr-linux-amd64, el nombre que espera install.sh)
 #   5. Se publica en crates.io si el secret CARGO_REGISTRY_TOKEN está definido
 
 name: Release Build
@@ -92,8 +93,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp target/release/newerr "newerr-linux-x86_64"
-          gh release create "v${VERSION}" "newerr-linux-x86_64" \
+          cp target/release/newerr "newerr-linux-amd64"
+          gh release create "v${VERSION}" "newerr-linux-amd64" \
             --title "newerr v${VERSION}" \
             --generate-notes
 
