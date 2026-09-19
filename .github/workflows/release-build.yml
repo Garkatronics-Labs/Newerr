@@ -1,0 +1,108 @@
+# Release Build
+#
+# Se dispara al hacer push a `main` o a la rama `release` (si existe).
+#
+# Solo publica cuando el commit más reciente del push empieza con el prefijo:
+#
+#     release 1.2.3: descripción...
+#
+# La versión se extrae del propio mensaje ("1.2.3" en el ejemplo) y con ella:
+#   1. Se actualiza `version` en Cargo.toml (+ Cargo.lock vía cargo build)
+#   2. Se hace commit del bump con "[skip ci]" (para no re-disparar este workflow)
+#   3. Se crea y pushea la tag v1.2.3
+#   4. Se crea un GitHub Release con el binario compilado (linux x86_64)
+#   5. Se publica en crates.io si el secret CARGO_REGISTRY_TOKEN está definido
+
+name: Release Build
+
+on:
+  push:
+    branches:
+      - main
+      - release
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Detectar versión de release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+    steps:
+      - name: Extraer versión del mensaje del commit
+        id: extract
+        run: |
+          MESSAGE="$(jq -r '.head_commit.message // empty' "$GITHUB_EVENT_PATH")"
+          FIRST_LINE="$(printf '%s\n' "$MESSAGE" | head -n 1)"
+          VERSION="$(printf '%s\n' "$FIRST_LINE" | grep -oE '^release[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}' | head -n 1 || true)"
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+          if [ -n "${VERSION}" ]; then
+            echo "::notice::Release detectado: v${VERSION}"
+          else
+            echo "::notice::El commit no empieza con 'release x.y.z:' — no se publica"
+          fi
+
+  release:
+    name: Publicar v${{ needs.detect.outputs.version }}
+    needs: detect
+    if: needs.detect.outputs.version != ''
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.detect.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Actualizar versión en Cargo.toml
+        run: |
+          awk -v ver="${VERSION}" \
+            '/^\[/ { in_pkg = ($0 ~ /^\[package\]/) }
+            in_pkg && /^version = / { sub(/^version = .*/, "version = \"" ver "\"") }
+            { print }' Cargo.toml > Cargo.toml.tmp
+          mv Cargo.toml.tmp Cargo.toml
+          echo "Nueva versión:"
+          grep -n '^version' Cargo.toml | head -n 1
+
+      - name: Compilar release
+        run: cargo build --release
+
+      - name: Commit del bump, tag y push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if ! git diff --quiet -- Cargo.toml Cargo.lock; then
+            git add Cargo.toml Cargo.lock
+            git commit -m "chore: bump version a ${VERSION} [skip ci]"
+          fi
+
+          git tag "v${VERSION}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "v${VERSION}"
+
+      - name: Crear GitHub Release con el binario
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp target/release/newerr "newerr-linux-x86_64"
+          gh release create "v${VERSION}" "newerr-linux-x86_64" \
+            --title "newerr v${VERSION}" \
+            --generate-notes
+
+      - name: Publicar en crates.io (opcional)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
+            echo "CARGO_REGISTRY_TOKEN no definido — se omite la publicación en crates.io"
+            exit 0
+          fi
+          cargo publish

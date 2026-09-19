@@ -1,0 +1,14 @@
+banned_ids = []
+last_id = "0001"
+
+[categories.0]
+name = "general"
+description = "Default category."
+
+[[errors]]
+id = "0001"
+name = "Test"
+category_id = "0"
+severity = "warning"
+message = ""
+hint = ""

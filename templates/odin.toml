@@ -1,0 +1,28 @@
+header = """
+#+feature dynamic-literals
+
+package {{package}}
+
+"""
+
+[[section]]
+category_end = "\n"
+category = [
+  { text = "// {{category}}" },
+]
+error = [
+  { text = "Err_{{name}} :: Error_Id({{id}})" },
+]
+
+[[section]]
+prefix = "\n\nerror_catalog := map[Error_Id]Error_Meta{\n"
+suffix = "\n}\n"
+error = [
+  { text = """
+    {{name}} = {
+        message  = "{{message}}",
+        hint     = "{{hint}}",
+        severity = "{{severity}}",
+        category = "{{category}}",
+    },""" },
+]

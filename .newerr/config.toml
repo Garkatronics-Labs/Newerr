@@ -1,0 +1,5 @@
+generated_errors_file_path = "./test.odin"
+
+[id_generator]
+type = "sequential_hex"
+digits = 4
