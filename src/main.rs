@@ -48,6 +48,15 @@ enum Commands {
         package: Option<String>,
     },
 
+    /// Generates the markdown documentation into the path configured in
+    /// `.newerr/config.toml` (`generated_docs_file_path`), without touching
+    /// the `gen` output file.
+    Doc {
+        /// Template to use (builtin or .newerr/templates/<name>.toml)
+        #[arg(short = 't', long, default_value = "markdown")]
+        template: String,
+    },
+
     /// Create a new error
     Err {
         name: String,
@@ -113,6 +122,17 @@ fn parse_err_prop(s: &str) -> anyhow::Result<ErrProp> {
     }
 }
 
+fn write_output_file(path: &str, content: &str) -> anyhow::Result<()> {
+    let output = Path::new(path);
+    // `parent()` de un nombre simple es `Some("")`; no crear dirs en ese caso.
+    if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = File::create(output)?;
+    file.write_all(content.as_bytes())?;
+    Ok(())
+}
+
 fn load_template(project: &Path, name: &str) -> Result<Template, Box<dyn std::error::Error>> {
     let custom = project
         .join(".newerr/templates")
@@ -170,20 +190,44 @@ fn main() -> anyhow::Result<()> {
             let t = load_template(&env::current_dir()?, &frontend)
                 .map_err(|e| anyhow::anyhow!("failed to load template '{frontend}': {e}"))?;
 
-            let output = Path::new(&config.generated_errors_file_path);
-            if let Some(parent) = output.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            let mut file = File::create(output)?;
-            let content = t.write_down(package, &errors);
-            file.write_all(content.as_bytes())?;
+            write_output_file(
+                &config.generated_errors_file_path,
+                &t.write_down(package, &errors),
+            )?;
 
             if cli.verbose {
                 println!(
                     "Generated {} error(s) into '{}'",
                     errors.errors.len(),
-                    output.display()
+                    config.generated_errors_file_path
+                );
+            }
+
+            Ok(())
+        }
+
+        Commands::Doc { template } => {
+            let config = load_config()?;
+            let errors = load_errors()?;
+
+            let output_path = config.generated_docs_file_path.as_deref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "'generated_docs_file_path' is not set in .newerr/config.toml — add it to use 'newerr doc'"
+                )
+            })?;
+
+            let package = config.package.as_deref().unwrap_or("errors");
+
+            let t = load_template(&env::current_dir()?, &template)
+                .map_err(|e| anyhow::anyhow!("failed to load template '{template}': {e}"))?;
+
+            write_output_file(output_path, &t.write_down(package, &errors))?;
+
+            if cli.verbose {
+                println!(
+                    "Generated {} error(s) documentation into '{}'",
+                    errors.errors.len(),
+                    output_path
                 );
             }
 

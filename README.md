@@ -2,6 +2,24 @@
 
 CLI tool for software error management and automation.
 
+## Usage
+
+- `newerr init` – create the `.newerr/` project config
+- `newerr err <name> --category <cat> --severity <sev> [--message <msg>] [--hint <hint>]` – add a new error
+- `newerr cat <name>` – add a new category
+- `newerr modify <id> <property> <value>` – modify an error property
+- `newerr gen [--frontend <name>]` – generate the code file, written to `generated_errors_file_path` (builtin frontends: `markdown`, `odin`)
+- `newerr doc [--template <name>]` – generate the documentation, written to `generated_docs_file_path` without touching the `gen` output (default template: `markdown`)
+- `newerr completions <shell>` – print shell completions
+
+Templates are looked up in `.newerr/templates/<name>.toml` first, then in the
+builtin ones. Config lives in `.newerr/config.toml`:
+
+- `generated_errors_file_path` – where `gen` writes
+- `generated_docs_file_path` – where `doc` writes (optional; `doc` errors if unset)
+- `id_generator` – id generation strategy
+- `package` – optional package name used in templates
+
 ## Install
 
 ```sh

@@ -1,4 +1,5 @@
 generated_errors_file_path = "./test.odin"
+generated_docs_file_path = "ERRORS.md"
 
 [id_generator]
 type = "sequential_hex"

@@ -95,6 +95,7 @@ impl ProjectConfig {
 
         let defconfig = ProjectConfig {
             generated_errors_file_path: "unknown".to_string(),
+            generated_docs_file_path: Some("ERRORS.md".to_string()),
             id_generator: IdGenerator::SequentialHex { digits: 4 },
             package: None,
         };

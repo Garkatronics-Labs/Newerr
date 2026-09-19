@@ -37,6 +37,9 @@ pub struct Category {
 #[serde(deny_unknown_fields)]
 pub struct ProjectConfig {
     pub generated_errors_file_path: String,
+    /// Ruta donde `newerr doc` escribe la documentación markdown por defecto.
+    #[serde(default)]
+    pub generated_docs_file_path: Option<String>,
     pub id_generator: IdGenerator,
     #[serde(default)]
     pub package: Option<String>,
