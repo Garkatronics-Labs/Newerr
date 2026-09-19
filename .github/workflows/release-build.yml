@@ -4,7 +4,7 @@
 #
 # Solo publica cuando el commit más reciente del push empieza con el prefijo:
 #
-#     release 1.2.3: descripción...
+#     release 1.2.3: descripción...    (o "version 1.2.3: descripción...")
 #
 # La versión se extrae del propio mensaje ("1.2.3" en el ejemplo) y con ella:
 #   1. Se actualiza `version` en Cargo.toml (+ Cargo.lock vía cargo build)
@@ -40,14 +40,14 @@ jobs:
         run: |
           MESSAGE="$(jq -r '.head_commit.message // empty' "$GITHUB_EVENT_PATH")"
           FIRST_LINE="$(printf '%s\n' "$MESSAGE" | head -n 1)"
-          VERSION="$(printf '%s\n' "$FIRST_LINE" | grep -oE '^release[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}' | head -n 1 || true)"
+          VERSION="$(printf '%s\n' "$FIRST_LINE" | grep -oiE '^(release|version)[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}' | head -n 1 || true)"
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
           if [ -n "${VERSION}" ]; then
             echo "::notice::Release detectado: v${VERSION}"
           else
-            echo "::notice::El commit no empieza con 'release x.y.z:' — no se publica"
+            echo "::notice::El commit no empieza con 'release x.y.z:' ni 'version x.y.z:' — no se publica"
           fi
 
   release:
