@@ -1,22 +1,74 @@
+# Header: rendered once at the top of the generated file.
 header = """
 #+feature dynamic-literals
 
 package {{package}}
 
+Error_Id :: distinct u32
+
+Left_Err :: struct {
+    id:             Error_Id,
+    file_name:      string,
+    line:           i32,
+    procedure_name: string,
+}
+
+Either :: union($Right: typeid) #no_nil {
+    Right,
+    Left_Err,
+}
+
+err :: proc(id: Error_Id, loc := #caller_location) -> Left_Err {
+    return Left_Err{
+        id             = id,
+        line           = loc.line,
+        procedure_name = loc.procedure,
+        file_name      = loc.file_path,
+    }
+}
+
+Error_Meta :: struct {
+    message:  string,
+    hint:     string,
+    severity: string,
+    category: string
+}
+
+message_for :: proc(e: Left_Err) -> string {
+    meta, ok := error_catalog[e.id]
+    if !ok {
+        return fmt.tprintf("unknown error id: %#x", u32(e.id))
+    }
+    return meta.message
+}
+
+
+// Returns true if `id` lies inside the open (start, end) category range.
+err_in_cat :: proc(id: Error_Id, start: Error_Id, end: Error_Id) -> bool {
+	return id > start && id < end
+}
+
 """
 
+# Per-category section: range constants and error declarations.
 [[section]]
-category_end = "\n"
+prefix = "// --- error declarations per category ---\n"
+end = ""
+category_end = ""
 category = [
-  { text = "// {{category}}" },
+  { text = "\n// {{category}} — errors [{{category_id_start}} .. {{category_id_end}}]\n" },
+  { text = "Err_Cat_{{category}}_Start :: Error_Id({{category_id_start}})\n", skip_if_empty = "category_id_start" },
+  { text = "Err_Cat_{{category}}_End   :: Error_Id({{category_id_end}})\n", skip_if_empty = "category_id_start" },
 ]
 error = [
-  { text = "Err_{{name}} :: Error_Id({{id}})" },
+  { text = "Err_{{name}} :: Error_Id({{id}})\n" },
 ]
 
+# Metadata catalog: one map entry per error.
 [[section]]
-prefix = "\n\nerror_catalog := map[Error_Id]Error_Meta{\n"
-suffix = "\n}\n"
+prefix = "\n\n// --- error metadata catalog ---\nerror_catalog := map[Error_Id]Error_Meta{\n"
+end = ""
+suffix = "}\n"
 error = [
   { text = """
     Err_{{name}} = {
@@ -24,5 +76,6 @@ error = [
         hint     = "{{hint}}",
         severity = "{{severity}}",
         category = "{{category}}",
-    },""" },
+    },
+""" },
 ]

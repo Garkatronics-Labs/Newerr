@@ -14,7 +14,6 @@ use crate::dtos::{
     Severity, UuidVersion,
 };
 
-use rand::Rng;
 use rand::{
     RngExt,
     distr::{Alphanumeric, SampleString},

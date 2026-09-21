@@ -139,7 +139,7 @@ pub struct Section {
     /// Se añade tras cada pieza emitida.
     #[serde(default = "default_end")]
     pub end: String,
-    /// Se añade tras cada categoría (después de sus errores).
+    /// Se añade tras las piezas de categoría (antes de sus errores).
     #[serde(default)]
     pub category_end: String,
     #[serde(default)]
@@ -166,6 +166,10 @@ pub enum Placeholder {
     Severity,
     Category,
     CategoryDescription,
+    /// First error id of the current category (empty if it has no errors).
+    CategoryIdStart,
+    /// Last error id of the current category.
+    CategoryIdEnd,
     Package,
 }
 
@@ -177,10 +181,22 @@ impl Template {
     pub fn write_down(&self, package: &str, errors: &ProjectErrors) -> String {
         let mut r = String::new();
 
-        r.push_str(&Self::replace_in_text(&self.header, package, None, None));
+        r.push_str(&Self::replace_in_text(
+            &self.header,
+            package,
+            None,
+            &[],
+            None,
+        ));
 
         for sec in &self.sections {
-            r.push_str(&Self::replace_in_text(&sec.prefix, package, None, None));
+            r.push_str(&Self::replace_in_text(
+                &sec.prefix,
+                package,
+                None,
+                &[],
+                None,
+            ));
 
             let grouped = Self::group_by_category(errors);
 
@@ -188,35 +204,66 @@ impl Template {
                 let cat = errors.categories.get(&cat_id);
 
                 for piece in &sec.category {
-                    if Self::should_skip(piece, cat, None) {
+                    if Self::should_skip(piece, cat, &errs, None) {
                         continue;
                     }
-                    r.push_str(&Self::replace_in_text(&piece.text, package, cat, None));
+                    r.push_str(&Self::replace_in_text(
+                        &piece.text,
+                        package,
+                        cat,
+                        &errs,
+                        None,
+                    ));
                 }
                 r.push_str(&Self::replace_in_text(
                     &sec.category_end,
                     package,
                     cat,
+                    &errs,
                     None,
                 ));
 
                 for (i, err) in errs.iter().enumerate() {
                     for piece in &sec.error {
-                        if Self::should_skip(piece, cat, Some(err)) {
+                        if Self::should_skip(piece, cat, &errs, Some(err)) {
                             continue;
                         }
-                        r.push_str(&Self::replace_in_text(&piece.text, package, cat, Some(err)));
+                        r.push_str(&Self::replace_in_text(
+                            &piece.text,
+                            package,
+                            cat,
+                            &errs,
+                            Some(err),
+                        ));
                     }
                     if i + 1 < errs.len() {
-                        r.push_str(&Self::replace_in_text(&sec.end, package, cat, None));
+                        r.push_str(&Self::replace_in_text(
+                            &sec.end,
+                            package,
+                            cat,
+                            &errs,
+                            None,
+                        ));
                     }
                 }
             }
 
-            r.push_str(&Self::replace_in_text(&sec.suffix, package, None, None));
+            r.push_str(&Self::replace_in_text(
+                &sec.suffix,
+                package,
+                None,
+                &[],
+                None,
+            ));
         }
 
-        r.push_str(&Self::replace_in_text(&self.footer, package, None, None));
+        r.push_str(&Self::replace_in_text(
+            &self.footer,
+            package,
+            None,
+            &[],
+            None,
+        ));
 
         r
     }
@@ -237,14 +284,19 @@ impl Template {
         result
     }
 
-    fn should_skip(piece: &Piece, cat: Option<&Category>, err: Option<&ErrorEntry>) -> bool {
+    fn should_skip(
+        piece: &Piece,
+        cat: Option<&Category>,
+        errs: &[&ErrorEntry],
+        err: Option<&ErrorEntry>,
+    ) -> bool {
         let Some(placeholder) = piece.skip_if_empty else {
             return false;
         };
         if placeholder == Placeholder::Package {
             return false;
         }
-        Self::placeholder_value(placeholder, cat, err)
+        Self::placeholder_value(placeholder, cat, errs, err)
             .trim()
             .is_empty()
     }
@@ -252,6 +304,7 @@ impl Template {
     fn placeholder_value(
         ph: Placeholder,
         cat: Option<&Category>,
+        errs: &[&ErrorEntry],
         err: Option<&ErrorEntry>,
     ) -> String {
         match ph {
@@ -266,6 +319,12 @@ impl Template {
             Placeholder::CategoryDescription => {
                 cat.map(|c| c.description.clone()).unwrap_or_default()
             }
+            Placeholder::CategoryIdStart => {
+                errs.first().map(|e| e.id.clone()).unwrap_or_default()
+            }
+            Placeholder::CategoryIdEnd => {
+                errs.last().map(|e| e.id.clone()).unwrap_or_default()
+            }
             Placeholder::Package => unreachable!(),
         }
     }
@@ -274,6 +333,7 @@ impl Template {
         text: &str,
         package: &str,
         cat: Option<&Category>,
+        errs: &[&ErrorEntry],
         err: Option<&ErrorEntry>,
     ) -> String {
         let mut s = text.to_string();
@@ -282,6 +342,14 @@ impl Template {
         s = s.replace(
             "{{category_description}}",
             cat.map(|c| c.description.as_str()).unwrap_or(""),
+        );
+        s = s.replace(
+            "{{category_id_start}}",
+            errs.first().map(|e| e.id.as_str()).unwrap_or(""),
+        );
+        s = s.replace(
+            "{{category_id_end}}",
+            errs.last().map(|e| e.id.as_str()).unwrap_or(""),
         );
         if let Some(e) = err {
             s = s.replace("{{id}}", &e.id);
